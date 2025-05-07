@@ -1,15 +1,74 @@
-# RabbitMQ Demo with Spring Boot
+# RabbitMQ 示例项目
 
-这是一个使用Spring Boot和RabbitMQ的示例项目，展示了如何配置和使用RabbitMQ进行消息的发送和接收。
+一个使用 Spring Boot 和 RabbitMQ 的示例项目，展示了如何使用 JAX-RS (Jersey) 实现 REST API 并与 RabbitMQ 集成。
 
-## 技术栈
+## 环境要求
 
 - JDK 21
-- Spring Boot 3.2.3
-- RabbitMQ
 - Gradle
-- Kotlin (配置类)
-- Java (消费者类)
+- RabbitMQ 服务器
+
+## 配置说明
+
+### 本地配置
+
+1. 在项目根目录创建 `.env` 文件（此文件不会被 Git 追踪）
+2. 从 `.env.example` 复制内容到 `.env`
+3. 在 `.env` 中更新你的 RabbitMQ 配置：
+
+```properties
+# RabbitMQ 配置
+RABBITMQ_HOST=你的rabbitmq主机地址
+RABBITMQ_PORT=5672
+RABBITMQ_USERNAME=你的用户名
+RABBITMQ_PASSWORD=你的密码
+RABBITMQ_VHOST=/
+
+# 服务器配置
+SERVER_PORT=8080
+```
+
+注意：`.env` 文件包含敏感信息，永远不要提交到版本控制系统。
+
+## 构建和运行
+
+1. 构建项目：
+```bash
+./gradlew build
+```
+
+2. 运行应用：
+```bash
+./gradlew bootRun
+```
+
+## API 接口
+
+### 发送消息 (GET)
+```bash
+curl "http://localhost:8080/api/messages?message=Hello%20RabbitMQ"
+```
+响应：
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": "Message sent: Hello RabbitMQ"
+}
+```
+
+### 发送消息 (POST)
+```bash
+curl -X POST -H "Content-Type: text/plain" -d "Hello RabbitMQ" http://localhost:8080/api/messages/send
+```
+响应：
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": "ok"
+}
+```
 
 ## 项目结构
 
@@ -17,115 +76,48 @@
 src/main/
 ├── java/
 │   └── com/example/rabbitdemo/
-│       ├── consumer/
-│       │   └── MessageConsumer.java    # 消息消费者
+│       ├── api/
+│       │   ├── MessageApi.java         # REST API 接口
+│       │   └── ApiResponse.java        # 统一响应结构
+│       ├── common/
+│       │   └── ApiResponse.java        # 公共工具类
+│       ├── config/
+│       │   └── DotenvEnvironmentPostProcessor.java  # 环境配置
+│       ├── producer/
+│       │   └── MessageProducer.java    # 消息生产者
 │       └── RabbitDemoApplication.java  # 应用程序入口
 ├── kotlin/
 │   └── com/example/rabbitdemo/
 │       └── config/
-│           ├── RabbitMQConfig.kt       # RabbitMQ配置
-│           └── RabbitMQConstants.kt    # 常量定义
+│           └── JerseyConfig.kt         # JAX-RS 配置
 └── resources/
-    └── application.yml                 # 应用配置
+    ├── application.yml                 # 应用配置
+    └── META-INF/
+        └── spring.factories            # Spring 配置
 ```
 
-## 主要功能
+## 功能特性
 
-1. 消息发送
-   - 通过REST API发送消息
-   - 使用Direct Exchange和Routing Key
-   - 支持消息持久化
+- 使用 RabbitMQ 的异步消息处理
+- 使用 JAX-RS (Jersey) 的 RESTful API
+- 基于 .env 文件的环境配置
+- 消息确认机制
+- 错误处理
+- JSON 响应格式
 
-2. 消息接收
-   - 自动消息确认
-   - 简单的消息处理逻辑
-   - 支持消息重试
+## 依赖说明
 
-## 配置说明
-
-### RabbitMQ配置
-
-```yaml
-spring:
-  rabbitmq:
-    host: xxxx
-    port: xxxx
-    username: xxxx
-    password: xxxx
-    virtual-host: /
-```
-
-### 队列和交换机配置
-
-- 队列名称: `demo.queue`
-- 交换机名称: `demo.exchange`
-- 路由键: `demo.routing.key`
-
-## 使用方法
-
-1. 启动应用
-```bash
-./gradlew bootRun
-```
-
-2. 发送消息
-```bash
-curl -X POST -H "Content-Type: text/plain" -d "Hello RabbitMQ" http://localhost:8080/api/messages
-```
-
-3. 查看消息接收
-应用控制台会打印接收到的消息。
-
-## 代码说明
-
-### 消费者 (MessageConsumer.java)
-```java
-@Component
-public class MessageConsumer {
-    public void receiveMessage(String message) {
-        System.out.println("Received message: " + message);
-    }
-}
-```
-
-### 配置类 (RabbitMQConfig.kt)
-```kotlin
-@Configuration
-class RabbitMQConfig {
-    @Bean
-    fun queue(): Queue = QueueBuilder.durable(RabbitMQConstants.QUEUE_NAME).build()
-
-    @Bean
-    fun exchange(): DirectExchange = DirectExchange(RabbitMQConstants.EXCHANGE_NAME)
-
-    @Bean
-    fun binding(queue: Queue, exchange: DirectExchange): Binding =
-        BindingBuilder.bind(queue)
-            .to(exchange)
-            .with(RabbitMQConstants.ROUTING_KEY)
-
-    @Bean
-    fun messageListenerContainer(
-        connectionFactory: ConnectionFactory,
-        consumer: MessageConsumer
-    ): SimpleMessageListenerContainer =
-        SimpleMessageListenerContainer().apply {
-            this.connectionFactory = connectionFactory
-            setQueueNames(RabbitMQConstants.QUEUE_NAME)
-            setMessageListener { message: Message -> 
-                consumer.receiveMessage(String(message.body))
-            }
-            setAcknowledgeMode(AcknowledgeMode.AUTO)
-            setPrefetchCount(RabbitMQConstants.PREFETCH_COUNT)
-        }
-}
-```
+- Spring Boot 3.2.3
+- Spring AMQP
+- Jersey (JAX-RS)
+- Jackson JSON 处理
+- Dotenv 环境配置
 
 ## 注意事项
 
-1. 确保RabbitMQ服务器已启动并可访问
+1. 确保 RabbitMQ 服务器已启动并可访问
 2. 检查配置文件中的连接信息是否正确
-3. 确保防火墙允许RabbitMQ端口访问
+3. 确保防火墙允许 RabbitMQ 端口访问
 
 ## 后续优化方向
 
@@ -135,6 +127,6 @@ class RabbitMQConfig {
 4. 实现消息确认机制
 5. 添加监控和日志记录
 
-## License
+## 开源协议
 
 MIT License 
