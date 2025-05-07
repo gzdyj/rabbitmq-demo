@@ -1,0 +1,24 @@
+spring:
+  rabbitmq:
+    host: xxxx
+    port: xxxx
+    username: xxxx
+    password: xxxx
+    virtual-host: /
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+    listener:
+      simple:s
+        retry:
+          enabled: true
+          initial-interval: 1000
+          max-attempts: 3
+          max-interval: 10000
+          multiplier: 2.0
+        acknowledge-mode: manual
+        prefetch: 1
+
+server:
+  port: 8080 
